@@ -92,9 +92,9 @@ class FinancialPricer(tk.Tk):
         self.swap_result = ttk.Label(self.swap_frame, text="")
         self.swap_result.pack(pady=10)
 
-    def plot_graph(self, frame, x_data, y_data, title, xlabel, ylabel):
+    def plot_graph(self, frame, x_data, y_data, title, xlabel, ylabel, show_grid=False, x_axis_at_zero=False):
         """
-        Plot a graph in the given frame using Matplotlib.
+        Plot a graph in the given frame using Matplotlib with optional grid and x-axis alignment.
         """
         for widget in frame.winfo_children():
             widget.destroy()  # Clear previous graph
@@ -105,11 +105,20 @@ class FinancialPricer(tk.Tk):
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         ax.legend()
+        
+        # Add grid if specified
+        if show_grid:
+            ax.grid(True, linestyle='--', alpha=0.7)
+        
+        # Set x-axis at zero if specified
+        if x_axis_at_zero:
+            ax.axhline(0, color='black', linewidth=1, linestyle='--')
 
         canvas = FigureCanvasTkAgg(fig, master=frame)
         canvas_widget = canvas.get_tk_widget()
         canvas_widget.pack(fill="both", expand=True)
         canvas.draw()
+
 
     def price_option(self):
         try:
@@ -132,9 +141,12 @@ class FinancialPricer(tk.Tk):
             # Generate Breakeven Graph
             spot_prices = np.linspace(S * 0.5, S * 1.5, 100)
             payoffs = [(max(sp - K, 0) if self.option_type.get() == "call" else max(K - sp, 0)) - price for sp in spot_prices]
-            self.plot_graph(self.option_graph_frame, spot_prices, payoffs, "Option Breakeven Graph", "Spot Price ($)", "Payoff ($)")
+            
+            # Add grid and a clear x-axis for the breakeven graph
+            self.plot_graph(self.option_graph_frame, spot_prices, payoffs, "Option Breakeven Graph", "Spot Price ($)", "Payoff ($)", show_grid=True, x_axis_at_zero=True)
         except ValueError:
             self.option_result.configure(text="Please enter valid numbers.")
+
 
     def price_future(self):
         try:
@@ -149,7 +161,7 @@ class FinancialPricer(tk.Tk):
             # Generate Term Structure Graph
             times = np.linspace(0, T, 100)
             prices = S * np.exp((r + c) * times)
-            self.plot_graph(self.future_graph_frame, times, prices, "Future Price Movement (Cost of Carry)", "Time to Maturity (years)", "Future Price ($)")
+            self.plot_graph(self.future_graph_frame, times, prices, "Future Price Movement (Cost of Carry)", "Time to Maturity (years)", "Future Price ($)", show_grid=True)
         except ValueError:
             self.future_result.configure(text="Please enter valid numbers.")
 

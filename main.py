@@ -2,36 +2,26 @@ import tkinter as tk
 from tkinter import ttk
 import numpy as np
 from scipy.stats import norm
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class LabeledEntry(ttk.Frame):
-    """
-    A reusable labeled entry widget with an optional label text.
-    """
     def __init__(self, parent, label_text, default_value="", *args, **kwargs):
         super().__init__(parent)
         ttk.Label(self, text=label_text).pack(side="left", padx=(0, 10))
         self.entry = ttk.Entry(self, width=20)
         self.entry.pack(side="left", fill="x", expand=True)
-        self.entry.insert(0, default_value)  # Add default value
+        self.entry.insert(0, default_value)
     
     def get(self):
-        """
-        Returns the value in the entry field.
-        """
         return self.entry.get()
-
-    def clear(self):
-        """
-        Clears the entry field.
-        """
-        self.entry.delete(0, tk.END)
 
 class FinancialPricer(tk.Tk):
     def __init__(self):
         super().__init__()
         
         self.title("Financial Instrument Pricer")
-        self.geometry("800x600")
+        self.geometry("1200x800")
         
         style = ttk.Style()
         style.theme_use('clam')
@@ -73,16 +63,25 @@ class FinancialPricer(tk.Tk):
         ttk.Button(self.option_frame, text="Calculate Price", command=self.price_option).pack(pady=20)
         self.option_result = ttk.Label(self.option_frame, text="")
         self.option_result.pack(pady=10)
-    
+
+        # Graph Frame for Option Breakeven Graph
+        self.option_graph_frame = ttk.Frame(self.option_frame)
+        self.option_graph_frame.pack(fill="both", expand=True, pady=20)
+
     def setup_future_tab(self):
         self.future_spot = self.create_labeled_entry(self.future_frame, "Spot Price ($):", "100")
         self.future_rate = self.create_labeled_entry(self.future_frame, "Risk-free Rate (%):", "5")
         self.future_maturity = self.create_labeled_entry(self.future_frame, "Time to Maturity (years):", "1")
+        self.carry_cost = self.create_labeled_entry(self.future_frame, "Cost of Carry (%):", "2")
         
         ttk.Button(self.future_frame, text="Calculate Future Price", command=self.price_future).pack(pady=20)
         self.future_result = ttk.Label(self.future_frame, text="")
         self.future_result.pack(pady=10)
-    
+
+        # Graph Frame for Term Structure
+        self.future_graph_frame = ttk.Frame(self.future_frame)
+        self.future_graph_frame.pack(fill="both", expand=True, pady=20)
+
     def setup_swap_tab(self):
         self.notional = self.create_labeled_entry(self.swap_frame, "Notional Amount ($):", "1000000")
         self.fixed_rate = self.create_labeled_entry(self.swap_frame, "Fixed Rate (%):", "3")
@@ -92,7 +91,26 @@ class FinancialPricer(tk.Tk):
         ttk.Button(self.swap_frame, text="Calculate Swap Value", command=self.price_swap).pack(pady=20)
         self.swap_result = ttk.Label(self.swap_frame, text="")
         self.swap_result.pack(pady=10)
-    
+
+    def plot_graph(self, frame, x_data, y_data, title, xlabel, ylabel):
+        """
+        Plot a graph in the given frame using Matplotlib.
+        """
+        for widget in frame.winfo_children():
+            widget.destroy()  # Clear previous graph
+
+        fig, ax = plt.subplots(figsize=(5, 4))
+        ax.plot(x_data, y_data, label="Breakeven/Price Movement", color="blue")
+        ax.set_title(title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.legend()
+
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas_widget = canvas.get_tk_widget()
+        canvas_widget.pack(fill="both", expand=True)
+        canvas.draw()
+
     def price_option(self):
         try:
             S = float(self.spot.get())
@@ -110,20 +128,31 @@ class FinancialPricer(tk.Tk):
                 price = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
             
             self.option_result.configure(text=f"Option Price: ${price:.2f}")
+
+            # Generate Breakeven Graph
+            spot_prices = np.linspace(S * 0.5, S * 1.5, 100)
+            payoffs = [(max(sp - K, 0) if self.option_type.get() == "call" else max(K - sp, 0)) - price for sp in spot_prices]
+            self.plot_graph(self.option_graph_frame, spot_prices, payoffs, "Option Breakeven Graph", "Spot Price ($)", "Payoff ($)")
         except ValueError:
             self.option_result.configure(text="Please enter valid numbers.")
-    
+
     def price_future(self):
         try:
             S = float(self.future_spot.get())
             r = float(self.future_rate.get()) / 100
+            c = float(self.carry_cost.get()) / 100
             T = float(self.future_maturity.get())
             
-            future_price = S * np.exp(r * T)
+            future_price = S * np.exp((r + c) * T)
             self.future_result.configure(text=f"Future Price: ${future_price:.2f}")
+
+            # Generate Term Structure Graph
+            times = np.linspace(0, T, 100)
+            prices = S * np.exp((r + c) * times)
+            self.plot_graph(self.future_graph_frame, times, prices, "Future Price Movement (Cost of Carry)", "Time to Maturity (years)", "Future Price ($)")
         except ValueError:
             self.future_result.configure(text="Please enter valid numbers.")
-    
+
     def price_swap(self):
         try:
             notional = float(self.notional.get())
